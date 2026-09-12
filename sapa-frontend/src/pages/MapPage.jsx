@@ -303,7 +303,7 @@ export default function MapPage({ onBack, mapAction }) {
     const filteredHaltes = haltes.filter((halte) => {
         // Filter aksesibilitas
         const cocokAksesibilitas =
-            selectedFilters.length === 0 &&
+            selectedFilters.length === 0 ||
             selectedFilters.some((filter) => {
                 if (filter === "sangat") {
                     return halte.kelas === "Sangat Aksesibel";
@@ -330,6 +330,7 @@ export default function MapPage({ onBack, mapAction }) {
         // Filter viewport
         const cocokViewport =
             visibleHalteIds === null ||
+            visibleHalteIds.length === 0 ||
             visibleHalteIds.includes(Number(halte.id));
 
         return cocokAksesibilitas && cocokViewport;
@@ -510,7 +511,7 @@ export default function MapPage({ onBack, mapAction }) {
                         title="Accessibility Map"
                     />
 
-                    <div className="absolute bottom-0 left-0 w-full overflow-x-auto px-4 pb-4">
+                    <div className="absolute bottom-0 left-0 z-10 w-full overflow-x-auto px-4 pb-4">
                         <div className="flex w-max gap-4">
                             {filteredHaltes.map((halte) => (
                                 <button

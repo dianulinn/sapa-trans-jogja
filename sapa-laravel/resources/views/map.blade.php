@@ -53,7 +53,9 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .maplibregl-ctrl-attrib {
@@ -89,12 +91,17 @@
 
         const urlParams = new URLSearchParams(window.location.search);
 
-        const lat = Number(urlParams.get('lat'));
-        const long = Number(urlParams.get('long'));
+        const rawLat = urlParams.get('lat');
+        const rawLong = urlParams.get('long');
 
         const hasLocation =
-            Number.isFinite(lat) &&
-            Number.isFinite(long);
+            rawLat !== null &&
+            rawLong !== null &&
+            !isNaN(Number(rawLat)) &&
+            !isNaN(Number(rawLong));
+
+        const lat = hasLocation ? Number(rawLat) : null;
+        const long = hasLocation ? Number(rawLong) : null;
 
 
         // ==========================================

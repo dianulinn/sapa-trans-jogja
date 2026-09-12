@@ -165,17 +165,48 @@ class MapidController extends Controller
                     'nama' => $halte->halte_ona,
                     'id_mapid' => $halte->id_mapid,
 
+                    // Koordinat
                     'lat' => $halte->lat,
                     'long' => $halte->long,
 
+                    // Informasi halte
+                    'jalur' => $halte->jalur ?? null,
                     'kelas' => $halte->kelas ?? null,
                     'rating' => $halte->skor_final ?? null,
+                    'jenis_halte' => $halte->jenis_halt ?? null,
 
+                    // Fasilitas + kondisi
                     'fasilitas' => [
                         'atap' => $halte->fas_atap ?? null,
+                        'kondisi_atap' => $halte->kondisi_at ?? null,
+
                         'ramp' => $halte->fas_ramp ?? null,
+                        'kondisi_ramp' => $halte->kondisi_ra ?? null,
+
+                        'pegangan' => $halte->fas_pegawa ?? null,
+                        'tempat_duduk' => $halte->fas_tempat ?? null,
+                        'papan_informasi' => $halte->fas_papan_ ?? null,
+                        'lampu' => $halte->fas_lampu ?? null,
+
+                        'trotoar' => $halte->fas_trotoa ?? null,
+                        'kondisi_trotoar' => $halte->kondisi_tr ?? null,
+
+                        'guiding_block' => $halte->fas_guildi ?? null,
+                        'kondisi_guiding_block' => $halte->kondisi_gu ?? null,
+
+                        'penyeberangan' => $halte->fas_penyeb ?? null,
+                        'jenis_penyeberangan' => $halte->jenis_peny ?? null,
                     ],
 
+                    // Skor
+                    'skor' => [
+                        'fasilitas' => $halte->skor_fas ?? null,
+                        'kondisi' => $halte->skor_kondi ?? null,
+                        'total' => $halte->skor_total ?? null,
+                        'final' => $halte->skor_final ?? null,
+                    ],
+
+                    // Foto dari MAPID
                     'foto' => $mapid['medias'] ?? [],
                 ];
             }

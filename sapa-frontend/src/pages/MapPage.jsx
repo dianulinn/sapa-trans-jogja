@@ -415,7 +415,13 @@ export default function MapPage({ onBack }) {
                                         </span>
 
                                         <div className="mt-[15px] h-[51px] w-[58px] overflow-hidden rounded-[6px] bg-[#D0D5DD]">
-                                            {halte.foto?.length > 0 ? (
+                                            {halte.foto?.length > 1 ? (
+                                                <img
+                                                    src={halte.foto[1]}
+                                                    alt={`Foto ${halte.nama}`}
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : halte.foto?.length > 0 ? (
                                                 <img
                                                     src={halte.foto[0]}
                                                     alt={`Foto ${halte.nama}`}
@@ -532,27 +538,120 @@ export default function MapPage({ onBack }) {
                                     {/* LIST FASILITAS - BISA SCROLL SENDIRI */}
                                     <div className="flex flex-col gap-3">
                                         {[
-                                            { key: "atap", label: "Atap" },
-                                            { key: "ramp", label: "Jalan Ramp" },
+                                            {
+                                                key: "atap",
+                                                label: "Atap",
+                                                iconKey: "Atap",
+                                                conditionKey: "kondisi_atap",
+                                                tooltip: true,
+                                            },
+                                            {
+                                                key: "ramp",
+                                                label: "Jalan Ramp",
+                                                iconKey: "Jalan Ramp",
+                                                conditionKey: "kondisi_ramp",
+                                                tooltip: true,
+                                            },
+                                            {
+                                                key: "guiding_block",
+                                                label: "Guiding Block (Jalur Pemandu)",
+                                                iconKey: "Guiding Block (Jalur Pemandu)",
+                                                conditionKey: "kondisi_guiding_block",
+                                                tooltip: true,
+                                            },
+                                            {
+                                                key: "trotoar",
+                                                label: "Trotoar",
+                                                iconKey: "Trotoar",
+                                                conditionKey: "kondisi_trotoar",
+                                                tooltip: true,
+                                            },
+                                            {
+                                                key: "pegangan",
+                                                label: "Pegangan",
+                                                iconKey: "Pegawai Trans",
+                                                tooltip: false,
+                                            },
+                                            {
+                                                key: "tempat_duduk",
+                                                label: "Tempat duduk",
+                                                iconKey: "Tempat duduk",
+                                                tooltip: false,
+                                            },
+                                            {
+                                                key: "papan_informasi",
+                                                label: "Papan Informasi",
+                                                iconKey: "Papan Informasi",
+                                                tooltip: false,
+                                            },
+                                            {
+                                                key: "lampu",
+                                                label: "Lampu",
+                                                iconKey: "Lampu",
+                                                tooltip: false,
+                                            },
+                                            {
+                                                key: "penyeberangan",
+                                                label: "Jalan Penyeberangan",
+                                                iconKey: "Jalan Penyeberangan",
+                                                tooltip: false,
+                                            },
                                         ]
                                             .filter(
                                                 (item) =>
                                                     selectedHalte.fasilitas?.[item.key] === "ada"
                                             )
-                                            .map((item) => (
-                                                <div
-                                                    key={item.key}
-                                                    className="flex items-center gap-4"
-                                                >
-                                                    <div className="flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-[8px] bg-[#E7EDFF]">
-                                                        {facilityIcons[item.label]}
-                                                    </div>
+                                            .map((item) => {
+                                                const kondisi =
+                                                    selectedHalte.fasilitas?.[item.conditionKey];
 
-                                                    <span className="font-['Nunito'] text-[14px] font-normal leading-normal text-[#999]">
-                                                        {item.label}
-                                                    </span>
-                                                </div>
-                                            ))}
+                                                return (
+                                                    <div
+                                                        key={item.key}
+                                                        className="flex items-center gap-4"
+                                                    >
+                                                        {/* ICON FASILITAS */}
+                                                        <div className="flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-[8px] bg-[#E7EDFF]">
+                                                            {facilityIcons[item.iconKey]}
+                                                        </div>
+
+                                                        {/* NAMA FASILITAS */}
+                                                        <div className="flex min-w-0 items-center gap-2">
+                                                            <span className="font-['Nunito'] text-[14px] font-normal leading-normal text-[#999]">
+                                                                {item.label}
+                                                            </span>
+
+                                                            {/* ICON INFO + TOOLTIP KHUSUS 4 FASILITAS */}
+                                                            {item.tooltip && (
+                                                                <span className="group relative flex h-[13px] w-[13px] flex-shrink-0 cursor-help items-center justify-center">
+                                                                    <svg
+                                                                        xmlns="http://www.w3.org/2000/svg"
+                                                                        width="13"
+                                                                        height="13"
+                                                                        viewBox="0 0 13 13"
+                                                                        fill="none"
+                                                                    >
+                                                                        <path
+                                                                            d="M6.33333 4V6.33333M6.33333 8.66667H6.33917M12.1667 6.33333C12.1667 9.555 9.555 12.1667 6.33333 12.1667C3.11167 12.1667 0.5 9.555 0.5 6.33333C0.5 3.11167 3.11167 0.5 6.33333 0.5C9.555 0.5 12.1667 3.11167 12.1667 6.33333Z"
+                                                                            stroke="#999999"
+                                                                            strokeLinecap="round"
+                                                                            strokeLinejoin="round"
+                                                                        />
+                                                                    </svg>
+
+                                                                    {/* TOOLTIP */}
+                                                                    <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 hidden w-max max-w-[230px] -translate-x-1/2 rounded-[6px] bg-[#333] px-3 py-2 font-['Nunito'] text-[11px] font-normal leading-[15px] text-white shadow-md group-hover:block">
+                                                                        {item.label}{" "}
+                                                                        {kondisi
+                                                                            ? `dalam kondisi ${kondisi}`
+                                                                            : "tersedia"}
+                                                                    </span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                     </div>
                                 </div>
 

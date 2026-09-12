@@ -8,10 +8,16 @@ import BottomNavbar from "./components/BottomNavbar";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
+  const [mapAction, setMapAction] = useState(null);
   const mapRef = useRef(null);
 
   const handleNavigation = (tab) => {
     setActiveTab(tab);
+  };
+
+  const handleOpenMap = (mapData) => {
+    setMapAction(mapData);
+    setActiveTab("map");
   };
 
   // Fungsi untuk merespons perintah pergerakan peta dari AI Chatbot
@@ -42,6 +48,7 @@ export default function App() {
           onPreference={() => setActiveTab("preference")}
           onChat={() => setActiveTab("chat")}
           onMap={() => setActiveTab("map")}
+          onOpenMap={handleOpenMap}
         />
       )}
 
@@ -63,6 +70,7 @@ export default function App() {
           ref={mapRef}
           onBack={() => setActiveTab("home")}
           onMapAction={handleMapAction}
+          mapAction={mapAction}
         />
       )}
 

@@ -183,7 +183,7 @@ class MapidController extends Controller
                         'ramp' => $halte->fas_ramp ?? null,
                         'kondisi_ramp' => $halte->kondisi_ra ?? null,
 
-                        'pegangan' => $halte->fas_pegawa ?? null,
+                        'fas_pegawa' => $halte->fas_pegawa ?? null,
                         'tempat_duduk' => $halte->fas_tempat ?? null,
                         'papan_informasi' => $halte->fas_papan_ ?? null,
                         'lampu' => $halte->fas_lampu ?? null,

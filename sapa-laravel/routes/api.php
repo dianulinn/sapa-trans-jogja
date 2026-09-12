@@ -18,3 +18,6 @@ Route::get('/haltes', [MapidController::class, 'haltes']);
 
 //GEMINI AI
 Route::post('/chat', [ChatbotController::class, 'chat']);
+
+// Search Halte
+Route::get('/search-halte', [MapController::class, 'searchHalte']);

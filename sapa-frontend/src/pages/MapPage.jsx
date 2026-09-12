@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "@fontsource/rubik/500.css";
 import MapComponent from "../components/Map/MapComponent";
 
@@ -198,8 +198,52 @@ const facilityIcons = {
     ),
 };
 
-export default function MapPage({ onBack }) {
+export default function MapPage({ onBack, mapAction }) {
     const [haltes, setHaltes] = useState([]);
+    const [searchLocation, setSearchLocation] = useState("");
+    const [selectedHalte, setSelectedHalte] = useState(null);
+    const [selectedFoto, setSelectedFoto] = useState(null);
+    const [visibleHalteIds, setVisibleHalteIds] = useState(null);
+
+    const [showFilter, setShowFilter] = useState(false);
+    const [selectedFilters, setSelectedFilters] = useState(
+        filterOptions.map((filter) => filter.id)
+    );
+
+    const mapIframeRef = useRef(null);
+
+    const handleMapSearch = async () => {
+        const destination = searchLocation.trim();
+
+        if (!destination) return;
+
+        try {
+            const response = await fetch(
+                `http://127.0.0.1:8000/api/search-halte?destination=${encodeURIComponent(destination)}`
+            );
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                alert(result.message || "Lokasi tidak ditemukan");
+                return;
+            }
+
+            const { lat, long } = result.destination;
+
+            mapIframeRef.current?.contentWindow?.postMessage(
+                {
+                    type: "SEARCH_LOCATION",
+                    lat: Number(lat),
+                    long: Number(long),
+                },
+                "http://127.0.0.1:8000"
+            );
+        } catch (error) {
+            console.error("Gagal mencari lokasi:", error);
+            alert("Gagal mencari lokasi");
+        }
+    };
 
     useEffect(() => {
         fetch("http://127.0.0.1:8000/api/haltes")
@@ -213,11 +257,6 @@ export default function MapPage({ onBack }) {
             });
     }, []);
 
-    const [selectedHalte, setSelectedHalte] = useState(null);
-    const [selectedFoto, setSelectedFoto] = useState(null);
-    const [showFilter, setShowFilter] = useState(false);
-    const [selectedFilters, setSelectedFilters] = useState([]);
-
     const toggleFilter = (id) => {
         setSelectedFilters((current) =>
             current.includes(id)
@@ -225,6 +264,75 @@ export default function MapPage({ onBack }) {
                 : [...current, id]
         );
     };
+
+    useEffect(() => {
+        mapIframeRef.current?.contentWindow?.postMessage(
+            {
+                type: "FILTER_ACCESSIBILITY",
+                filters: selectedFilters,
+            },
+            "http://127.0.0.1:8000"
+        );
+    }, [selectedFilters]);
+
+    useEffect(() => {
+        const handleMapMessage = (event) => {
+            if (
+                event.origin !== "http://127.0.0.1:5173" &&
+                event.origin !== "http://localhost:5173"
+            ) {
+                return;
+            }
+
+            if (event.data?.type !== "VISIBLE_HALTES") {
+                return;
+            }
+
+            setVisibleHalteIds(event.data.ids || []);
+        };
+
+        window.addEventListener("message", handleMapMessage);
+
+        return () => {
+            window.removeEventListener("message", handleMapMessage);
+        };
+    }, []);
+
+    // Filter Halte
+    const filteredHaltes = haltes.filter((halte) => {
+        // Filter aksesibilitas
+        const cocokAksesibilitas =
+            selectedFilters.length === 0 ||
+            selectedFilters.some((filter) => {
+                if (filter === "sangat") {
+                    return halte.kelas === "Sangat Aksesibel";
+                }
+
+                if (filter === "cukup") {
+                    return halte.kelas === "Cukup Aksesibel";
+                }
+
+                if (filter === "kurang") {
+                    return halte.kelas === "Kurang Aksesibel";
+                }
+
+                if (filter === "tidak") {
+                    return (
+                        halte.kelas === "Tidak Aksesibel" ||
+                        halte.kelas === "Tidak tersedia"
+                    );
+                }
+
+                return false;
+            });
+
+        // Filter viewport
+        const cocokViewport =
+            visibleHalteIds === null ||
+            visibleHalteIds.includes(halte.id);
+
+        return cocokAksesibilitas && cocokViewport;
+    });
 
     return (
         <div className="h-screen overflow-hidden bg-[#F7F9FC]">
@@ -332,8 +440,24 @@ export default function MapPage({ onBack }) {
                                 <input
                                     type="text"
                                     placeholder="Jalan Malioboro"
+                                    value={searchLocation}
+                                    onChange={(e) => setSearchLocation(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            handleMapSearch();
+                                        }
+                                    }}
                                     className="min-w-0 flex-1 border-0 bg-transparent p-0 font-['Inter'] text-[12px] font-medium leading-normal text-[#9B9B9B] outline-none placeholder:text-[#9B9B9B]"
                                 />
+
+                                <button
+                                    type="button"
+                                    onClick={handleMapSearch}
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                                    aria-label="Cari lokasi"
+                                >
+                                    <span className="text-[16px]">🔍</span>
+                                </button>
 
                             </div>
 
@@ -345,14 +469,28 @@ export default function MapPage({ onBack }) {
 
                 <main className="relative h-[calc(100vh-150px-76px)] w-full overflow-hidden">
                     <iframe
-                        src="http://127.0.0.1:8000/map"
+                        ref={mapIframeRef}
+                        src={
+                            mapAction?.center
+                                ? `http://127.0.0.1:8000/map?lat=${mapAction.center[1]}&long=${mapAction.center[0]}`
+                                : "http://127.0.0.1:8000/map?lat=-7.80115625421&long=110.36040362"
+                        }
+                        onLoad={() => {
+                            mapIframeRef.current?.contentWindow?.postMessage(
+                                {
+                                    type: "FILTER_ACCESSIBILITY",
+                                    filters: selectedFilters,
+                                },
+                                "http://127.0.0.1:8000"
+                            );
+                        }}
                         className="h-full w-full border-0"
                         title="Accessibility Map"
                     />
 
                     <div className="absolute bottom-0 left-0 w-full overflow-x-auto px-4 pb-4">
                         <div className="flex w-max gap-4">
-                            {haltes.map((halte) => (
+                            {filteredHaltes.map((halte) => (
                                 <button
                                     key={halte.id}
                                     type="button"
@@ -485,7 +623,10 @@ export default function MapPage({ onBack }) {
 
                 {/* Panel Halte */}
                 {selectedHalte && (
-                    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/20">
+                    <div
+                        className="fixed inset-0 z-50 flex items-end justify-center bg-black/20"
+                        onClick={() => setSelectedHalte(null)}
+                    >
                         <div
                             className="flex h-[68vh] w-full max-w-[480px] flex-col rounded-[40px_40px_0_0] bg-[#F8F8F8] p-5"
                             onClick={(e) => e.stopPropagation()}
@@ -567,8 +708,8 @@ export default function MapPage({ onBack }) {
                                                 tooltip: true,
                                             },
                                             {
-                                                key: "pegangan",
-                                                label: "Pegangan",
+                                                key: "fas_pegawa",
+                                                label: "Pegawai Trans",
                                                 iconKey: "Pegawai Trans",
                                                 tooltip: false,
                                             },

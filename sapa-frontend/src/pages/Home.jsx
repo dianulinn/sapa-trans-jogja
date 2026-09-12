@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import BottomNavbar from "../components/BottomNavbar";
 import sapaLogo from "../assets/sapa ai logo.png";
 
-export default function Home({ onPreference, onChat }) {
+export default function Home({ onPreference, onChat, onOpenMap }) {
     // Simpan Preferensi
     const savedPreferences = JSON.parse(
         localStorage.getItem("sapaPreferences") || "null"
@@ -40,6 +40,82 @@ export default function Home({ onPreference, onChat }) {
     // ==========================================
     const [destination, setDestination] = useState("");
     const [activeTab, setActiveTab] = useState("home");
+    const [recommendations, setRecommendations] = useState([]);
+
+    // Preferensi
+    const [preferences, setPreferences] = useState(() => {
+        const saved = localStorage.getItem("sapaPreferences");
+
+        return saved
+            ? JSON.parse(saved)
+            : {
+                wheelchair: false,
+                stroller: false,
+                walkingAid: false,
+                guidePath: false,
+            };
+    });
+
+    useEffect(() => {
+        const saved = localStorage.getItem("sapaPreferences");
+
+        if (saved) {
+            setPreferences(JSON.parse(saved));
+        }
+    }, []);
+
+    const activePreferences = Object.entries(preferences)
+        .filter(([_, value]) => value)
+        .map(([key]) => key);
+
+    // Preferensi
+    const sortByPreference = (data) => {
+        if (activePreferences.length === 0) {
+            return data;
+        }
+
+        return [...data].sort((a, b) => {
+            const getScore = (halte) => {
+                const fasilitas = halte.fasilitas || {};
+                let score = 0;
+
+                if (
+                    preferences.wheelchair &&
+                    String(fasilitas.ramp || "").toLowerCase() === "ada"
+                ) {
+                    score += 1;
+                }
+
+                if (
+                    preferences.stroller &&
+                    String(fasilitas.ramp || "").toLowerCase() === "ada"
+                ) {
+                    score += 1;
+                }
+
+                if (
+                    preferences.walkingAid &&
+                    (
+                        String(fasilitas.ramp || "").toLowerCase() === "ada" ||
+                        String(fasilitas.guiding_block || "").toLowerCase() === "ada"
+                    )
+                ) {
+                    score += 1;
+                }
+
+                if (
+                    preferences.guidePath &&
+                    String(fasilitas.guiding_block || "").toLowerCase() === "ada"
+                ) {
+                    score += 1;
+                }
+
+                return score;
+            };
+
+            return getScore(b) - getScore(a);
+        });
+    };
 
     // ==========================================
     // AREA INTEGRASI BACKEND (PLACEHOLDERS)
@@ -54,9 +130,106 @@ export default function Home({ onPreference, onChat }) {
 
     // Handler Ketik Pencarian Lokasi
     const handleSearchChange = (e) => {
-        setDestination(e.target.value);
-        // TODO Backend: Tambahkan logic auto-complete API atau debounce search disini
+        const value = e.target.value;
+
+        setDestination(value);
+
+        if (!value.trim()) {
+            setRecommendations([]);
+            sessionStorage.removeItem("sapaSearch");
+            return;
+        }
+
+        sessionStorage.setItem("sapaSearch", value);
+
+        clearTimeout(window.searchTimeout);
+
+        window.searchTimeout = setTimeout(async () => {
+            try {
+                const response = await fetch(
+                    `http://127.0.0.1:8000/api/search-halte?destination=${encodeURIComponent(value)}&preferences=${encodeURIComponent(activePreferences.join(","))}`
+                );
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    setRecommendations([]);
+                    return;
+                }
+
+                const searchResults = result.data || [];
+
+                const halteResponse = await fetch(
+                    "http://127.0.0.1:8000/api/haltes"
+                );
+
+                const halteResult = await halteResponse.json();
+
+                const allHaltes = halteResult.data || [];
+
+                const mergedResults = searchResults.map((halte) => {
+                    const detail = allHaltes.find(
+                        (item) => item.id === halte.id
+                    );
+
+                    return detail
+                        ? { ...halte, ...detail }
+                        : halte;
+                });
+
+                setRecommendations(sortByPreference(mergedResults));
+
+            } catch (error) {
+                console.error("GAGAL MENCARI TUJUAN:", error);
+                setRecommendations([]);
+            }
+        }, 700);
     };
+
+    useEffect(() => {
+        const savedSearch = sessionStorage.getItem("sapaSearch");
+
+        if (!savedSearch) return;
+
+        setDestination(savedSearch);
+
+        const restoreSearch = async () => {
+            try {
+                const response = await fetch(
+                    `http://127.0.0.1:8000/api/search-halte?destination=${encodeURIComponent(savedSearch)}&preferences=${encodeURIComponent(activePreferences.join(","))}`
+                );
+
+                const result = await response.json();
+
+                if (!result.success) return;
+
+                const halteResponse = await fetch(
+                    "http://127.0.0.1:8000/api/haltes"
+                );
+
+                const halteResult = await halteResponse.json();
+
+                const allHaltes = halteResult.data || [];
+
+                const mergedResults = (result.data || []).map((halte) => {
+                    const detail = allHaltes.find(
+                        (item) => item.id === halte.id
+                    );
+
+                    return detail
+                        ? { ...halte, ...detail }
+                        : halte;
+                });
+
+                setRecommendations(sortByPreference(mergedResults));
+
+            } catch (error) {
+                console.error("GAGAL MEMULIHKAN PENCARIAN:", error);
+            }
+        };
+
+        restoreSearch();
+    }, []);
 
     // Handler Tombol Notifikasi di Header
     const handleNotificationClick = () => {
@@ -69,8 +242,21 @@ export default function Home({ onPreference, onChat }) {
     };
 
     // Handler Klik Rekomendasi Rute
-    const handleRouteClick = (routeId) => {
-        alert(`TODO Backend: Fetch data detail rute untuk ID: ${routeId} dan buka Map`);
+    const handleRouteClick = (halteId) => {
+        const halte = recommendations.find(
+            (item) => item.id === halteId
+        );
+
+        if (!halte) return;
+
+        onOpenMap({
+            center: [
+                Number(halte.long),
+                Number(halte.lat)
+            ],
+            zoom: 18,
+            halteId: halte.id
+        });
     };
 
     // ==========================================
@@ -131,7 +317,7 @@ export default function Home({ onPreference, onChat }) {
                             </svg>
                             <input
                                 type="text"
-                                placeholder="Jalan Malioboro ke UGM"
+                                placeholder="Jalan Malioboro"
                                 value={destination}
                                 onChange={handleSearchChange}
                                 className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] font-normal text-[#333333] placeholder:text-[#9B9B9B] font-['Inter']"
@@ -187,7 +373,7 @@ export default function Home({ onPreference, onChat }) {
                             <div className="relative z-10 w-[75%] md:w-full">
                                 <h3 className="text-[18px] font-semibold text-white">Preferensi Mobilitas</h3>
                                 <p className="mt-1 text-[12px] font-normal leading-snug text-white/90 font-['Inter']">
-                                    Sesuaikan rekomendasi rute dengan kebutuhanmu. Pilih preferensimu!
+                                    Sesuaikan rekomendasi halte dengan kebutuhanmu. Pilih preferensimu!
                                 </p>
                             </div>
 
@@ -264,25 +450,26 @@ export default function Home({ onPreference, onChat }) {
                     {/* SECTION: REKOMENDASI RUTE */}
                     <section className="mt-8 mb-4">
                         <h3 className="text-[16px] font-semibold text-[#333333]">
-                            Rekomendasi Rute
+                            Rekomendasi Halte
                         </h3>
                         <div className="mt-4 flex gap-3 overflow-x-auto pb-4 md:grid md:grid-cols-3 md:gap-5 scrollbar-hide">
                             {/* Dilooping menggunakan data mockup, jika kosong tampilkan wadah kosong */}
-                            {mockRouteRecommendations.length > 0 ? (
-                                mockRouteRecommendations.map((route) => (
+                            {recommendations.length > 0 ? (
+                                recommendations.slice(0, 3).map((halte) => (
                                     <button
-                                        key={route.id}
-                                        onClick={() => handleRouteClick(route.id)}
-                                        className="relative shrink-0 w-[110px] h-[110px] md:w-full md:h-[180px] rounded-[12px] overflow-hidden bg-gray-200 border border-gray-100 shadow-sm transition-transform hover:scale-[1.02]"
+                                        key={halte.id}
+                                        onClick={() => handleRouteClick(halte.id)}
+                                        className="relative shrink-0 w-[110px] h-[110px] md:w-full md:h-[180px] rounded-[12px] overflow-hidden bg-gray-200 border border-gray-100 shadow-sm"
                                     >
-                                        <div
-                                            className="absolute inset-0 bg-cover bg-center opacity-70"
-                                            style={{ backgroundImage: `url(${route.image})` }}
-                                        ></div>
-                                        <div className="absolute inset-0 bg-black/10"></div>
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <span className="text-xl font-bold text-white drop-shadow-md">
-                                                {route.id}
+                                        <iframe
+                                            src={`http://127.0.0.1:8000/map?lat=${halte.lat}&long=${halte.long}`}
+                                            title={halte.halte_ona}
+                                            className="absolute inset-0 w-full h-full border-0 pointer-events-none"
+                                        />
+
+                                        <div className="absolute left-1.5 right-1.5 bottom-1.5 rounded-[6px] bg-white/90 px-1.5 py-1 text-center">
+                                            <span className="block truncate text-[9px] font-semibold text-[#333333]">
+                                                {halte.halte_ona}
                                             </span>
                                         </div>
                                     </button>

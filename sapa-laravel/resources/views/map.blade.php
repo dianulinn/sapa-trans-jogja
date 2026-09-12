@@ -15,44 +15,69 @@
             height: 100%;
         }
 
-        #map {
+        #map-container {
+            position: relative;
             width: 100%;
             height: 100%;
             min-height: 100vh;
         }
 
-        /* Attribution diperkecil untuk mini-map
-        .maplibregl-ctrl-attrib {
-            font-size: 8px !important;
-            line-height: 11px !important;
-            padding: 2px 5px !important;
-            max-width: calc(100vw - 70px);
-            white-space: normal;
-            opacity: 0.8;
+        #map {
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
-        .maplibregl-ctrl-attrib a {
-            font-size: 8px !important;
-        } */
+        #map-loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #F7F9FC;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            transition: opacity 0.3s ease;
+        }
 
-        /* @media (min-width: 768px) {
-            .maplibregl-ctrl-attrib {
-                font-size: 10px !important;
-                line-height: 14px !important;
-                max-width: none;
-                white-space: nowrap;
-            }
+        #map-loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #E0E0E0;
+            border-top-color: #3E81F3;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
 
-            .maplibregl-ctrl-attrib a {
-                font-size: 10px !important;
-            }
-        } */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .maplibregl-ctrl-attrib {
+            font-size: 0;
+        }
+
+        .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-inner {
+            font-size: 0;
+        }
+
+        .maplibregl-ctrl-attrib button {
+            font-size: 14px !important;
+        }
     </style>
 </head>
 
 <body>
 
-    <div id="map"></div>
+    <div id="map-container">
+        <div id="map"></div>
+        <div id="map-loading">
+            <div class="spinner"></div>
+        </div>
+    </div>
 
     <script type="module">
         import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.0.0/dist/maplibre-gl.mjs';
@@ -76,12 +101,9 @@
         // TENTUKAN CENTER DAN ZOOM
         // ==========================================
 
-        const mapCenter = hasLocation ? [long, lat] : [110.3695, -7.7956];
+        const mapCenter = hasLocation ? [long, lat] : [110.3667762, -7.7913247];
 
-        const mapZoom = hasLocation ?
-            15 :
-            12;
-
+        const mapZoom = hasLocation ? 18 : 13;
 
         // ==========================================
         // BUAT MAP
@@ -90,9 +112,25 @@
         const map = new maplibregl.Map({
             container: 'map',
             style: 'https://v2.basemap.mapid.io/styles/street-v2.0/style.json?key={{ env('MAPID_API_KEY') }}',
-            center: hasLocation ? [long, lat] : [110.3695, -7.7956],
-            zoom: hasLocation ? 18 : 12,
+            center: mapCenter,
+            zoom: mapZoom,
         });
+
+        function hideLoading() {
+            const mapEl = document.getElementById('map');
+            const loadingEl = document.getElementById('map-loading');
+
+            mapEl.style.opacity = '1';
+
+            if (loadingEl) {
+                loadingEl.style.opacity = '0';
+                setTimeout(() => loadingEl.remove(), 300);
+            }
+        }
+
+        // Fallback — kalau semua proses gagal/lambat banget,
+        // spinner tetap ke-hide otomatis daripada nyangkut selamanya
+        setTimeout(hideLoading, 8000);
 
         // ==========================================
         // DATA HALTE
@@ -120,7 +158,6 @@
 
         }
 
-
         // ==========================================
         // FUNGSI FILTER
         // ==========================================
@@ -131,72 +168,15 @@
             const source = map.getSource('haltes');
 
             if (!source) {
-
                 pendingFilters = filters;
-
-                console.log(
-                    '⏳ Filter menunggu source haltes siap:',
-                    filters
-                );
-
                 return;
             }
-
-
-            const filteredFeatures = allFeatures.filter((feature) => {
-                const kelas = feature.properties.kelas;
-
-                // Jika semua filter dimatikan,
-                // tampilkan semua halte dalam viewport
-                if (filters.length === 0) {
-                    return true;
-                }
-
-                return filters.some((filter) => {
-                    if (filter === 'sangat') {
-                        return kelas === 'Sangat Aksesibel';
-                    }
-
-                    if (filter === 'cukup') {
-                        return kelas === 'Cukup Aksesibel';
-                    }
-
-                    if (filter === 'kurang') {
-                        return kelas === 'Kurang Aksesibel';
-                    }
-
-                    if (filter === 'tidak') {
-                        return (
-                            kelas === 'Tidak Aksesibel' ||
-                            kelas === 'Tidak tersedia' ||
-                            !kelas
-                        );
-                    }
-
-                    return false;
-                });
-            });
-
 
             updateVisibleHaltes();
 
             console.log(
-                `🔎 Filter: ${
-        filters.join(', ') || 'semua'
-    }`
+                `🔎 Filter: ${filters.join(', ') || 'tidak ada filter'}`
             );
-
-
-            console.log(
-                `🔎 Filter: ${
-                    filters.join(', ') || 'semua'
-                } | ${
-                    filteredFeatures.length
-                }/${
-                    allFeatures.length
-                } titik`
-            );
-
         }
 
         // ==========================================
@@ -214,21 +194,16 @@
             const visibleFeatures = allFeatures.filter((feature) => {
                 const [long, lat] = feature.geometry.coordinates;
 
-                // Hanya tampilkan halte yang berada di viewport
                 if (!bounds.contains([long, lat])) {
                     return false;
                 }
 
                 const kelas = feature.properties.kelas;
 
-                // Jika tidak ada filter aksesibilitas,
-                // semua halte dalam viewport ditampilkan
                 if (currentFilters.length === 0) {
-                    return true;
+                    return false;
                 }
 
-                // Jika ada filter aksesibilitas,
-                // halte harus memenuhi filter DAN berada dalam viewport
                 return currentFilters.some((filter) => {
                     if (filter === 'sangat') {
                         return kelas === 'Sangat Aksesibel';
@@ -261,9 +236,11 @@
 
             window.parent.postMessage({
                     type: 'VISIBLE_HALTES',
-                    ids: visibleFeatures.map((feature) => feature.properties.id)
+                    ids: visibleFeatures.map(
+                        (feature) => Number(feature.properties.id)
+                    )
                 },
-                '*'
+                'http://localhost:5173'
             );
 
             console.log(
@@ -278,10 +255,6 @@
         map.on('load', async () => {
             map.resize();
 
-            // ======================================
-            // AMBIL DATA HALTE
-            // ======================================
-
             try {
 
                 const response = await fetch('/api/haltes');
@@ -293,19 +266,12 @@
                     result
                 );
 
-
                 const haltes = result.data || [];
-
 
                 console.log(
                     'JUMLAH HALTE DATABASE:',
                     haltes.length
                 );
-
-
-                // ==================================
-                // BUAT GEOJSON
-                // ==================================
 
                 const geojson = {
 
@@ -381,26 +347,40 @@
 
                 };
 
-
                 allFeatures = geojson.features;
 
+                // Cuma flyTo ke rata-rata semua halte KALAU gak ada
+                // lokasi spesifik dari search (biar hasil klik dari Home
+                // tetap zoom ke marker-nya, gak ke-reset)
+                if (!hasLocation && allFeatures.length > 0) {
+                    const total = allFeatures.length;
 
-                // ==================================
-                // SOURCE HALTE
-                // ==================================
+                    const centerLong =
+                        allFeatures.reduce(
+                            (sum, feature) => sum + feature.geometry.coordinates[0],
+                            0
+                        ) / total;
+
+                    const centerLat =
+                        allFeatures.reduce(
+                            (sum, feature) => sum + feature.geometry.coordinates[1],
+                            0
+                        ) / total;
+
+                    map.flyTo({
+                        center: [centerLong, centerLat],
+                        zoom: 13,
+                        essential: true
+                    });
+                }
 
                 map.addSource('haltes', {
-
                     type: 'geojson',
-
-                    data: geojson
-
+                    data: {
+                        type: 'FeatureCollection',
+                        features: []
+                    }
                 });
-
-
-                // ==================================
-                // LAYER TITIK HALTE
-                // ==================================
 
                 map.addLayer({
 
@@ -427,11 +407,6 @@
 
                 });
 
-
-                // ==================================
-                // TERAPKAN FILTER YANG MENUNGGU
-                // ==================================
-
                 if (pendingFilters !== null) {
 
                     applyFilter(
@@ -443,11 +418,13 @@
                 }
                 updateVisibleHaltes();
 
-
                 console.log(
                     '✅ TITIK HALTE DATABASE BERHASIL DITAMPILKAN'
                 );
 
+                // Pasang listener idle DI SINI — setelah flyTo (kalau ada)
+                // dipanggil, supaya nunggu tile hasil flyTo beneran selesai
+                map.once('idle', hideLoading);
 
             } catch (error) {
 
@@ -455,6 +432,8 @@
                     '❌ GAGAL MENGAMBIL DATA HALTE:',
                     error
                 );
+
+                hideLoading();
 
             }
 
@@ -476,7 +455,6 @@
             'message',
             (event) => {
 
-                // Hanya izinkan frontend kita
                 if (
                     event.origin !==
                     'http://127.0.0.1:5173' &&
@@ -487,7 +465,6 @@
                     return;
 
                 }
-
 
                 if (
                     event.data?.type !== 'FILTER_ACCESSIBILITY' &&
@@ -513,16 +490,13 @@
                     return;
                 }
 
-
                 const filters =
                     event.data.filters || [];
-
 
                 console.log(
                     '📩 FILTER DITERIMA:',
                     filters
                 );
-
 
                 applyFilter(filters);
 

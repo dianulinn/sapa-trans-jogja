@@ -277,10 +277,7 @@ export default function MapPage({ onBack, mapAction }) {
 
     useEffect(() => {
         const handleMapMessage = (event) => {
-            if (
-                event.origin !== "http://127.0.0.1:5173" &&
-                event.origin !== "http://localhost:5173"
-            ) {
+            if (event.origin !== "http://127.0.0.1:8000") {
                 return;
             }
 
@@ -288,7 +285,11 @@ export default function MapPage({ onBack, mapAction }) {
                 return;
             }
 
-            setVisibleHalteIds(event.data.ids || []);
+            const ids = (event.data.ids || []).map(Number);
+
+            console.log("ID HALTE YANG TERLIHAT:", ids);
+
+            setVisibleHalteIds(ids);
         };
 
         window.addEventListener("message", handleMapMessage);
@@ -302,7 +303,7 @@ export default function MapPage({ onBack, mapAction }) {
     const filteredHaltes = haltes.filter((halte) => {
         // Filter aksesibilitas
         const cocokAksesibilitas =
-            selectedFilters.length === 0 ||
+            selectedFilters.length === 0 &&
             selectedFilters.some((filter) => {
                 if (filter === "sangat") {
                     return halte.kelas === "Sangat Aksesibel";
@@ -329,7 +330,7 @@ export default function MapPage({ onBack, mapAction }) {
         // Filter viewport
         const cocokViewport =
             visibleHalteIds === null ||
-            visibleHalteIds.includes(halte.id);
+            visibleHalteIds.includes(Number(halte.id));
 
         return cocokAksesibilitas && cocokViewport;
     });
@@ -453,10 +454,31 @@ export default function MapPage({ onBack, mapAction }) {
                                 <button
                                     type="button"
                                     onClick={handleMapSearch}
-                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center"
                                     aria-label="Cari lokasi"
                                 >
-                                    <span className="text-[16px]">🔍</span>
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 16 16"
+                                        fill="none"
+                                    >
+                                        <circle
+                                            cx="7.33217"
+                                            cy="7.19252"
+                                            r="5.35902"
+                                            stroke="#D4D4D4"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="square"
+                                        />
+                                        <path
+                                            d="M10.9917 11.1387L14.0274 14.1664"
+                                            stroke="#D4D4D4"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="square"
+                                        />
+                                    </svg>
                                 </button>
 
                             </div>
@@ -473,7 +495,7 @@ export default function MapPage({ onBack, mapAction }) {
                         src={
                             mapAction?.center
                                 ? `http://127.0.0.1:8000/map?lat=${mapAction.center[1]}&long=${mapAction.center[0]}`
-                                : "http://127.0.0.1:8000/map?lat=-7.80115625421&long=110.36040362"
+                                : "http://127.0.0.1:8000/map"
                         }
                         onLoad={() => {
                             mapIframeRef.current?.contentWindow?.postMessage(

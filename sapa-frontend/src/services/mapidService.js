@@ -6,35 +6,26 @@ const API_BASE_URL = "http://localhost:3000/api";
  * @param {Object} feature - GeoJSON Polygon
  * @returns {Array} daftar activities
  */
-export async function fetchSurveyActivities(feature) {
+export async function fetchSurveyActivities() {
   try {
-    if (!feature) {
-      throw new Error("GeoJSON Polygon belum diberikan.");
-    }
-
-    const response = await fetch(`${API_BASE_URL}/activities`, {
-      method: "POST",
+    const response = await fetch("http://127.0.0.1:8000/api/activities", {
+      method: "GET",
       headers: {
-        "Content-Type": "application/json",
+        Accept: "application/json",
       },
-      body: JSON.stringify({
-        feature,
-      }),
     });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
     const result = await response.json();
 
-    console.log("Response Activities:", result);
+    console.log("DATA DARI LARAVEL:", result);
 
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message || "Gagal mengambil data Activities."
-      );
-    }
-
-    return result.data?.activities || [];
+    return result;
   } catch (error) {
     console.error("Error fetching MAPID Activities:", error);
-    return [];
+    throw error;
   }
 }

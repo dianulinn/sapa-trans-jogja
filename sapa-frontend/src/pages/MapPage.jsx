@@ -303,7 +303,7 @@ export default function MapPage({ onBack, mapAction }) {
     const filteredHaltes = haltes.filter((halte) => {
         // Filter aksesibilitas
         const cocokAksesibilitas =
-            selectedFilters.length === 0 &&
+            selectedFilters.length === 0 ||
             selectedFilters.some((filter) => {
                 if (filter === "sangat") {
                     return halte.kelas === "Sangat Aksesibel";

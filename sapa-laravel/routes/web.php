@@ -7,5 +7,7 @@ Route::get('/', function () {
 });
 
 Route::get('/map', function () {
-    return view('map');
+    return response()
+        ->view('map')
+        ->header('X-Frame-Options', 'ALLOWALL');
 });

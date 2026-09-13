@@ -58,12 +58,92 @@ class ChatbotController extends Controller
                 )
                 ->get();
 
+            // ==========================================
+            // CARI LOKASI YANG DITANYAKAN USER
+            // ==========================================
+            $destinationLat = null;
+            $destinationLong = null;
+            $nearestHalte = null;
+
+            $geocodeResponse = Http::timeout(15)
+                ->withHeaders([
+                    'User-Agent' => 'SAPA-Trans-Jogja/1.0',
+                    'Accept-Language' => 'id',
+                ])
+                ->get(
+                    'https://nominatim.openstreetmap.org/search',
+                    [
+                        'q' => $userMessage . ', Yogyakarta, Indonesia',
+                        'format' => 'jsonv2',
+                        'limit' => 1,
+                        'countrycodes' => 'id',
+                    ]
+                );
+
+            $locations = $geocodeResponse->json();
+
+            if ($geocodeResponse->successful() && !empty($locations)) {
+
+                $destinationLat = (float) $locations[0]['lat'];
+                $destinationLong = (float) $locations[0]['lon'];
+
+                // ==========================================
+                // HITUNG HALTE TERDEKAT
+                // ==========================================
+                foreach ($halteData as $halte) {
+
+                    if ($halte->lat === null || $halte->long === null) {
+                        continue;
+                    }
+
+                    $lat1 = deg2rad($destinationLat);
+                    $lon1 = deg2rad($destinationLong);
+
+                    $lat2 = deg2rad((float) $halte->lat);
+                    $lon2 = deg2rad((float) $halte->long);
+
+                    $dLat = $lat2 - $lat1;
+                    $dLon = $lon2 - $lon1;
+
+                    $a =
+                        sin($dLat / 2) * sin($dLat / 2) +
+                        cos($lat1) *
+                        cos($lat2) *
+                        sin($dLon / 2) *
+                        sin($dLon / 2);
+
+                    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+                    $distance = 6371 * $c;
+
+                    if (
+                        $nearestHalte === null ||
+                        $distance < $nearestHalte['distance']
+                    ) {
+                        $nearestHalte = [
+                            'id' => $halte->id,
+                            'nama' => $halte->halte_ona,
+                            'lat' => (float) $halte->lat,
+                            'long' => (float) $halte->long,
+                            'distance' => $distance,
+                        ];
+                    }
+                }
+            }
+
             // 2. System instruction untuk Gemini
             $systemInstruction =
                 "Kamu adalah SAPA AI, asisten transportasi dan aksesibilitas Trans Jogja.\n\n"
 
                 . "DATA HALTE TRANS JOGJA:\n"
                 . json_encode($halteData, JSON_UNESCAPED_UNICODE)
+                . "\n\n"
+                . "HASIL ANALISIS LOKASI USER:\n"
+                . json_encode([
+                    'latitude_lokasi' => $destinationLat,
+                    'longitude_lokasi' => $destinationLong,
+                    'halte_terdekat' => $nearestHalte
+                ], JSON_UNESCAPED_UNICODE)
                 . "\n\n"
 
                 . "KETERANGAN DATA:\n"
@@ -93,6 +173,10 @@ class ChatbotController extends Controller
                 . "8. Jika tidak ada halte atau lokasi yang perlu ditampilkan di peta, target_location harus null.\n"
                 . "9. Jika tidak ada filter kelas aksesibilitas, filter_kelas harus berupa array kosong.\n"
                 . "10. Jawab dengan bahasa Indonesia yang ramah, singkat, dan mudah dipahami.\n\n"
+                . "11. Jika pengguna menanyakan halte terdekat dari suatu lokasi, WAJIB gunakan hasil halte_terdekat dari analisis backend, jangan memilih halte lain.\n"
+                . "12. Jika halte_terdekat tersedia, sebutkan nama halte tersebut dalam reply.\n"
+                . "13. Jika pengguna meminta rekomendasi halte terdekat, reply harus memberi tahu pengguna terlebih dahulu bahwa halte tersebut direkomendasikan, lalu katakan bahwa pengguna akan diarahkan ke halte tersebut.\n"
+                . "14. Jika halte_terdekat tersedia, target_location WAJIB menggunakan koordinat halte_terdekat dalam format [longitude, latitude].\n"
 
                 . "OUTPUT WAJIB JSON VALID:\n"
                 . "{\n"
@@ -102,6 +186,12 @@ class ChatbotController extends Controller
                 . '  "filter_kelas": []' . "\n"
                 . "}";
 
+            $isNearestHalteQuestion =
+                preg_match(
+                    '/halte.*(terdekat|dekat)|mana.*halte|halte.*mana/i',
+                    $userMessage
+                );
+
             // 3. Panggil Gemini API
             $response = Http::timeout(60)
                 ->withHeaders([
@@ -109,7 +199,7 @@ class ChatbotController extends Controller
                     'x-goog-api-key' => $apiKey,
                 ])
                 ->post(
-                    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
+                    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent',
                     [
                         'systemInstruction' => [
                             'parts' => [
@@ -138,17 +228,36 @@ class ChatbotController extends Controller
 
             // 4. Jika Gemini error
             if ($response->failed()) {
-
                 Log::error('Gemini API Error', [
                     'status' => $response->status(),
                     'body' => $response->body()
                 ]);
 
+                // FALLBACK HANYA UNTUK PERTANYAAN HALTE TERDEKAT
+                if ($isNearestHalteQuestion && $nearestHalte) {
+                    return response()->json([
+                        'success' => true,
+                        'reply' =>
+                        'Kamu bisa ke ' . $nearestHalte['nama'] .
+                            ' karena merupakan halte terdekat dari lokasi yang kamu tanyakan. ' .
+                            'Setelah ini aku akan mengarahkan kamu ke halte tersebut.',
+                        'map_action' => [
+                            'center' => [
+                                $nearestHalte['long'],
+                                $nearestHalte['lat']
+                            ],
+                            'zoom' => 18,
+                            'halteId' => $nearestHalte['id'],
+                            'filter_kelas' => []
+                        ]
+                    ]);
+                }
+
+                // PERTANYAAN LAIN TETAP ERROR, TIDAK MENGARANG JAWABAN
                 return response()->json([
                     'success' => false,
-                    'message' => 'Gemini API mengalami error.',
-                    'error' => $response->json()
-                ], 500);
+                    'message' => 'Gemini API sedang mencapai batas penggunaan. Silakan coba lagi beberapa saat.'
+                ], 429);
             }
 
             // 5. Ambil response Gemini
@@ -186,7 +295,6 @@ class ChatbotController extends Controller
                     'filter_kelas' => $aiData['filter_kelas'] ?? []
                 ]
             ]);
-
         } catch (\Exception $e) {
 
             Log::error('Chatbot Controller Exception', [

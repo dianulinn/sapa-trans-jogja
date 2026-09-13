@@ -204,6 +204,7 @@ export default function MapPage({ onBack, mapAction }) {
     const [selectedHalte, setSelectedHalte] = useState(null);
     const [selectedFoto, setSelectedFoto] = useState(null);
     const [visibleHalteIds, setVisibleHalteIds] = useState(null);
+    const [userLocation, setUserLocation] = useState(null); //Lokasi Pengguna
 
     const [showFilter, setShowFilter] = useState(false);
     const [selectedFilters, setSelectedFilters] = useState(
@@ -211,6 +212,47 @@ export default function MapPage({ onBack, mapAction }) {
     );
 
     const mapIframeRef = useRef(null);
+
+    //Geolocation
+    useEffect(() => {
+        if (!navigator.geolocation) {
+            console.error("Geolocation tidak didukung browser");
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+
+                console.log("LOKASI PENGGUNA:", {
+                    lat: latitude,
+                    long: longitude,
+                });
+
+                setUserLocation({
+                    lat: latitude,
+                    long: longitude,
+                });
+
+                mapIframeRef.current?.contentWindow?.postMessage(
+                    {
+                        type: "USER_LOCATION",
+                        lat: latitude,
+                        long: longitude,
+                    },
+                    "*"
+                );
+            },
+            (error) => {
+                console.error("GAGAL MENDAPATKAN LOKASI:", error);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0,
+            }
+        );
+    }, []);
 
     const handleMapSearch = async () => {
         const destination = searchLocation.trim();
@@ -281,14 +323,39 @@ export default function MapPage({ onBack, mapAction }) {
                 return;
             }
 
+            if (event.data?.type === "HALTE_CLICKED") {
+                const halte = haltes.find(
+                    (item) => Number(item.id) === Number(event.data.id)
+                );
+
+                if (halte) {
+                    setSelectedHalte(halte);
+                }
+
+                return;
+            }
+
+            if (event.data?.type === "HALTE_CLICKED") {
+                const halte = haltes.find(
+                    (item) => Number(item.id) === Number(event.data.id)
+                );
+
+                console.log("HALTE DIKLIK:", event.data.id);
+                console.log("DATA HALTE:", halte);
+
+                if (halte) {
+                    setSelectedHalte(halte);
+                }
+
+                return;
+            }
+
             if (event.data?.type !== "VISIBLE_HALTES") {
                 return;
             }
 
             const ids = (event.data.ids || []).map(Number);
-
             console.log("ID HALTE YANG TERLIHAT:", ids);
-
             setVisibleHalteIds(ids);
         };
 
@@ -297,7 +364,7 @@ export default function MapPage({ onBack, mapAction }) {
         return () => {
             window.removeEventListener("message", handleMapMessage);
         };
-    }, []);
+    }, [haltes]);
 
     // Filter Halte
     const filteredHaltes = haltes.filter((halte) => {
@@ -329,8 +396,7 @@ export default function MapPage({ onBack, mapAction }) {
 
         // Filter viewport
         const cocokViewport =
-            visibleHalteIds === null ||
-            visibleHalteIds.length === 0 ||
+            visibleHalteIds !== null &&
             visibleHalteIds.includes(Number(halte.id));
 
         return cocokAksesibilitas && cocokViewport;
@@ -495,8 +561,10 @@ export default function MapPage({ onBack, mapAction }) {
                         ref={mapIframeRef}
                         src={
                             mapAction?.center
-                                ? `http://127.0.0.1:8000/map?lat=${mapAction.center[1]}&long=${mapAction.center[0]}`
-                                : "http://127.0.0.1:8000/map"
+                                ? `http://127.0.0.1:8000/map?lat=${mapAction.center[1]}&long=${mapAction.center[0]}&zoom=${mapAction.zoom || 18}`
+                                : userLocation
+                                    ? `http://127.0.0.1:8000/map?lat=${userLocation.lat}&long=${userLocation.long}&zoom=14`
+                                    : "http://127.0.0.1:8000/map"
                         }
                         onLoad={() => {
                             mapIframeRef.current?.contentWindow?.postMessage(
@@ -506,6 +574,17 @@ export default function MapPage({ onBack, mapAction }) {
                                 },
                                 "http://127.0.0.1:8000"
                             );
+
+                            if (userLocation) {
+                                mapIframeRef.current?.contentWindow?.postMessage(
+                                    {
+                                        type: "USER_LOCATION",
+                                        lat: userLocation.lat,
+                                        long: userLocation.long,
+                                    },
+                                    "*"
+                                );
+                            }
                         }}
                         className="h-full w-full border-0"
                         title="Accessibility Map"
@@ -564,7 +643,7 @@ export default function MapPage({ onBack, mapAction }) {
                                             </svg>
 
                                             <span className="font-['Nunito'] text-[12px] font-normal leading-[12px] text-[#A69F9F]">
-                                                Jarak {halte.jarak}
+                                                Jalur: {halte.jalur || "Jalur tidak tersedia"}
                                             </span>
                                         </div>
                                     </div>
@@ -848,8 +927,64 @@ export default function MapPage({ onBack, mapAction }) {
                                             </button>
                                         ))}
                                     </div>
-
                                 </div>
+
+                                {/*Button Petunjuk Rute*/}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        console.log("BUTTON RUTE DIKLIK");
+                                        console.log("USER LOCATION:", userLocation);
+                                        console.log("SELECTED HALTE:", selectedHalte);
+
+                                        if (!userLocation) {
+                                            alert("Lokasi pengguna belum tersedia");
+                                            return;
+                                        }
+
+                                        mapIframeRef.current?.contentWindow?.postMessage(
+                                            {
+                                                type: "ROUTE_TO_HALTE",
+                                                userLat: userLocation.lat,
+                                                userLong: userLocation.long,
+                                                halteLat: Number(selectedHalte.lat),
+                                                halteLong: Number(selectedHalte.long),
+                                            },
+                                            "*"
+                                        );
+                                        setSelectedHalte(null);
+                                    }}
+                                    className="mt-5 flex h-[40px] w-full flex-col items-center justify-center gap-[10px] self-stretch rounded-[10px] bg-[#3E81F3] px-4 py-3"
+                                >
+                                    <div className="flex items-center justify-center gap-2">
+                                        <span className="font-['Poppins'] text-[14px] font-medium leading-[100%] text-white">
+                                            Dapatkan Petunjuk Rute
+                                        </span>
+
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 16 16"
+                                            fill="none"
+                                        >
+                                            <path
+                                                d="M9.62008 3.95312L13.6667 7.99979L9.62008 12.0465"
+                                                stroke="white"
+                                                strokeMiterlimit="10"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            />
+                                            <path
+                                                d="M2.33335 8H13.5533"
+                                                stroke="white"
+                                                strokeMiterlimit="10"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            />
+                                        </svg>
+                                    </div>
+                                </button>
 
                             </div>
                         </div>
